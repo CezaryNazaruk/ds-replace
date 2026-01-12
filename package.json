@@ -1,0 +1,39 @@
+{
+  "name": "ds-replace",
+  "version": "1.0.0",
+  "description": "Figma plugin for replacing design system components with intelligent prop mapping",
+  "scripts": {
+    "build": "npm run build:plugin && npm run build:ui && npm run rename:ui",
+    "build:plugin": "esbuild src/plugin/code.ts --bundle --outfile=dist/code.js --target=es2017",
+    "build:ui": "vite build --config src/ui/vite.config.ts",
+    "rename:ui": "mv dist/index.html dist/ui.html 2>/dev/null || true",
+    "watch": "concurrently \"npm run watch:plugin\" \"npm run watch:ui\"",
+    "watch:plugin": "esbuild src/plugin/code.ts --bundle --outfile=dist/code.js --target=es2017 --watch",
+    "watch:ui": "vite build --config src/ui/vite.config.ts --watch",
+    "package": "mkdir -p figma-plugin && cp manifest.json figma-plugin/ && cp -r dist figma-plugin/ && zip -r figma-plugin.zip figma-plugin"
+  },
+  "keywords": [
+    "figma",
+    "figma-plugin",
+    "design-system",
+    "component-replacement"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "zustand": "^4.4.7"
+  },
+  "devDependencies": {
+    "@figma/plugin-typings": "^1.90.0",
+    "@types/react": "^18.2.45",
+    "@types/react-dom": "^18.2.18",
+    "@vitejs/plugin-react": "^4.2.1",
+    "concurrently": "^8.2.2",
+    "esbuild": "^0.19.11",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.10",
+    "vite-plugin-singlefile": "^2.0.0"
+  }
+}

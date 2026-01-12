@@ -1,0 +1,49 @@
+name: Build Figma Plugin
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:  # Allows manual trigger
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build plugin
+        run: npm run build
+
+      - name: Create plugin package
+        run: |
+          mkdir -p figma-plugin
+          cp manifest.json figma-plugin/
+          cp -r dist figma-plugin/
+          zip -r figma-plugin.zip figma-plugin
+
+      - name: Upload plugin artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: figma-plugin-${{ github.sha }}
+          path: figma-plugin.zip
+          retention-days: 30
+
+      - name: Upload latest plugin
+        uses: actions/upload-artifact@v4
+        with:
+          name: figma-plugin-latest
+          path: figma-plugin.zip
+          retention-days: 90
