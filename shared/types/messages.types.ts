@@ -47,7 +47,8 @@ export type UIMessage =
   | { type: 'preview-component'; payload: { instanceId: string; newComponentKey: string; propMapping: PropMapping } }
   | { type: 'search-components'; payload: { query: string } }
   | { type: 'get-component-properties'; payload: { componentKey: string } }
-  | { type: 'get-text-styles' };
+  | { type: 'get-text-styles' }
+  | { type: 'focus-on-node'; payload: { nodeId: string } };
 
 // Messages from Plugin → UI
 export type PluginMessage =

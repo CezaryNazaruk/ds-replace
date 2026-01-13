@@ -142,6 +142,7 @@ figma.ui.onmessage = async (msg) => {
         const { query } = msg.payload;
         const queryLower = query.toLowerCase();
         const results = [];
+        const processedKeys = new Set<string>();
 
         // Search local components
         const localComponents = figma.root.findAllWithCriteria({
@@ -149,22 +150,30 @@ figma.ui.onmessage = async (msg) => {
         }) as (ComponentNode | ComponentSetNode)[];
 
         for (const comp of localComponents) {
-          if (!comp.name.toLowerCase().includes(queryLower)) continue;
-
+          let targetComponent = comp;
           let displayName = comp.name;
           let componentKey = comp.key;
 
-          // For variants, use ComponentSet name
+          // For variants, use the parent ComponentSet instead
           if (comp.type === 'COMPONENT' && comp.parent?.type === 'COMPONENT_SET') {
+            targetComponent = comp.parent;
             displayName = comp.parent.name;
+            componentKey = comp.parent.key;
           }
 
+          // Skip if we already processed this ComponentSet
+          if (processedKeys.has(componentKey)) continue;
+          processedKeys.add(componentKey);
+
+          // Check if name matches query
+          if (!displayName.toLowerCase().includes(queryLower)) continue;
+
           results.push({
-            id: comp.id,
+            id: targetComponent.id,
             name: displayName,
             key: componentKey,
             library: 'Local',
-            thumbnail: await comp.exportAsync({
+            thumbnail: await targetComponent.exportAsync({
               format: 'PNG',
               constraint: { type: 'SCALE', value: 0.3 }
             })
@@ -258,6 +267,20 @@ figma.ui.onmessage = async (msg) => {
           type: 'text-styles-fetched',
           payload: { styles }
         });
+        break;
+      }
+
+      case 'focus-on-node': {
+        const { nodeId } = msg.payload;
+        const node = figma.getNodeById(nodeId) as SceneNode;
+
+        if (node) {
+          // Highlight the node in Figma
+          figma.currentPage.selection = [node];
+
+          // Scroll and zoom to make the node visible
+          figma.viewport.scrollAndZoomIntoView([node]);
+        }
         break;
       }
     }

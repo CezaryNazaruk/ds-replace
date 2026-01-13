@@ -33,6 +33,15 @@ interface AppState {
   isLoading: boolean;
   setLoading: (loading: boolean) => void;
 
+  // Navigation state
+  viewMode: 'list' | 'detail';
+  setViewMode: (mode: 'list' | 'detail') => void;
+  openDetailView: (instanceId: string) => void;
+  closeDetailView: () => void;
+  navigateToNext: () => void;
+  navigateToPrevious: () => void;
+  getPendingInstances: () => string[];
+
   // Skipped and replaced components
   skippedInstances: Set<string>;
   skipInstance: (instanceId: string) => void;
@@ -160,5 +169,75 @@ export const useStore = create<AppState>((set) => ({
   setComponentProperties: (properties) => set({ componentProperties: properties }),
 
   textStyles: [],
-  setTextStyles: (styles) => set({ textStyles: styles })
+  setTextStyles: (styles) => set({ textStyles: styles }),
+
+  // Navigation state
+  viewMode: 'list',
+  setViewMode: (mode) => set({ viewMode: mode }),
+
+  openDetailView: (instanceId) => {
+    set({
+      viewMode: 'detail',
+      selectedInstanceId: instanceId
+    });
+
+    // Send message to plugin to focus on the node
+    window.parent.postMessage({
+      pluginMessage: {
+        type: 'focus-on-node',
+        payload: { nodeId: instanceId }
+      }
+    }, '*');
+  },
+
+  closeDetailView: () => {
+    set({
+      viewMode: 'list',
+      selectedInstanceId: null,
+      previewData: null  // Clear preview when closing detail view
+    });
+  },
+
+  getPendingInstances: () => {
+    const state = useStore.getState();
+    const allInstances: string[] = [];
+
+    // Collect all instance IDs
+    state.components.forEach(comp => {
+      comp.instances.forEach(inst => {
+        allInstances.push(inst.id);
+      });
+    });
+
+    // Filter to only pending instances (not replaced or skipped)
+    return allInstances.filter(id =>
+      !state.replacedInstances.has(id) && !state.skippedInstances.has(id)
+    );
+  },
+
+  navigateToNext: () => {
+    const state = useStore.getState();
+    const pending = state.getPendingInstances();
+    const currentIndex = pending.indexOf(state.selectedInstanceId || '');
+
+    if (currentIndex !== -1 && currentIndex + 1 < pending.length) {
+      state.openDetailView(pending[currentIndex + 1]);
+    } else if (currentIndex === -1 && pending.length > 0) {
+      // If no current selection, go to first pending
+      state.openDetailView(pending[0]);
+    } else {
+      // No more pending instances, close detail view
+      state.closeDetailView();
+    }
+  },
+
+  navigateToPrevious: () => {
+    const state = useStore.getState();
+    const pending = state.getPendingInstances();
+    const currentIndex = pending.indexOf(state.selectedInstanceId || '');
+
+    if (currentIndex > 0) {
+      state.openDetailView(pending[currentIndex - 1]);
+    }
+  }
 }));
