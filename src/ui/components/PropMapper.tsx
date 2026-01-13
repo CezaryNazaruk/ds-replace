@@ -1,139 +1,133 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ComponentProperty, PropMapping } from '../../shared/types/component.types';
 import { useStore } from '../store';
 
 interface Props {
   oldProps: ComponentProperty[];
+  initialMapping?: PropMapping;
   onMappingChange: (mapping: PropMapping) => void;
 }
 
-export function PropMapper({ oldProps, onMappingChange }: Props) {
-  const [mapping, setMapping] = useState<PropMapping>({});
+export function PropMapper({ oldProps, initialMapping, onMappingChange }: Props) {
+  const [mapping, setMapping] = useState<PropMapping>(initialMapping || {});
   const componentProperties = useStore(state => state.componentProperties);
+  const [lastPropertiesLength, setLastPropertiesLength] = useState(0);
 
-  const handlePropMap = (oldPropName: string, newPropName: string, value: any) => {
+  // Initialize mapping with default values when component properties first load
+  useEffect(() => {
+    if (componentProperties.length > 0 && componentProperties.length !== lastPropertiesLength) {
+      const defaultMapping: PropMapping = {};
+      componentProperties.forEach(prop => {
+        defaultMapping[prop.name] = prop.defaultValue;
+      });
+      setMapping(defaultMapping);
+      onMappingChange(defaultMapping);
+      setLastPropertiesLength(componentProperties.length);
+    }
+  }, [componentProperties]);
+
+  // Sync with initialMapping when it changes
+  useEffect(() => {
+    if (initialMapping && Object.keys(initialMapping).length > 0) {
+      setMapping(initialMapping);
+    }
+  }, [initialMapping]);
+
+  const updateMapping = (propName: string, value: any) => {
     const newMapping = {
       ...mapping,
-      [oldPropName]: { newPropName, value }
+      [propName]: value
     };
     setMapping(newMapping);
     onMappingChange(newMapping);
   };
 
-  // Get the property definition for the selected new property
-  const getPropertyDefinition = (newPropName: string) => {
-    return componentProperties.find(prop => prop.name === newPropName);
+  const renderInputForProperty = (prop: any) => {
+    const currentValue = mapping[prop.name] !== undefined ? mapping[prop.name] : prop.defaultValue;
+
+    // VARIANT type - dropdown with options
+    if (prop.type === 'VARIANT' && prop.variantOptions) {
+      return (
+        <select
+          value={String(currentValue)}
+          onChange={(e) => updateMapping(prop.name, e.target.value)}
+        >
+          <option value="">Select variant...</option>
+          {prop.variantOptions.map((option: string) => (
+            <option key={option} value={option}>{option}</option>
+          ))}
+        </select>
+      );
+    }
+
+    // BOOLEAN type - dropdown On/Off
+    if (prop.type === 'BOOLEAN') {
+      return (
+        <select
+          value={String(currentValue)}
+          onChange={(e) => updateMapping(prop.name, e.target.value === 'true')}
+        >
+          <option value="true">On</option>
+          <option value="false">Off</option>
+        </select>
+      );
+    }
+
+    // INSTANCE_SWAP - text input for component key
+    if (prop.type === 'INSTANCE_SWAP') {
+      return (
+        <input
+          type="text"
+          value={String(currentValue)}
+          onChange={(e) => updateMapping(prop.name, e.target.value)}
+          placeholder="Component key"
+        />
+      );
+    }
+
+    // TEXT property - text input
+    return (
+      <input
+        type="text"
+        value={String(currentValue)}
+        onChange={(e) => updateMapping(prop.name, e.target.value)}
+        placeholder="Value"
+      />
+    );
   };
 
-  if (oldProps.length === 0) {
-    return (
-      <div className="prop-mapper">
-        <p style={{ fontSize: '13px', color: '#666' }}>No properties to map</p>
-      </div>
-    );
-  }
-
   return (
-    <div className="prop-mapper">
-      <h4>Property Mapping</h4>
-      <div className="prop-mapping-table">
-        <div className="table-header">
-          <span>Old Property</span>
-          <span>New Property</span>
-          <span>Value</span>
-        </div>
-        {oldProps.map(prop => (
-          <div key={prop.name} className="prop-row">
-            <div>{prop.name} ({prop.type})</div>
-            {componentProperties.length > 0 ? (
-              <select
-                value={mapping[prop.name]?.newPropName || ''}
-                onChange={(e) => handlePropMap(prop.name, e.target.value, mapping[prop.name]?.value || prop.value)}
-              >
-                <option value="">Select property...</option>
-                {componentProperties.map(newProp => (
-                  <option key={newProp.name} value={newProp.name}>
-                    {newProp.name} ({newProp.type})
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                type="text"
-                placeholder="Select component first"
-                value={mapping[prop.name]?.newPropName || ''}
-                onChange={(e) => handlePropMap(prop.name, e.target.value, mapping[prop.name]?.value || prop.value)}
-                disabled
-              />
-            )}
-            {(() => {
-              const newPropName = mapping[prop.name]?.newPropName || '';
-              const propDef = getPropertyDefinition(newPropName);
-              const currentValue = mapping[prop.name]?.value !== undefined ? mapping[prop.name].value : prop.value;
-
-              if (!newPropName) {
-                return (
-                  <input
-                    type="text"
-                    placeholder="Select property first"
-                    value={String(currentValue)}
-                    disabled
-                  />
-                );
-              }
-
-              // Variant property - use dropdown
-              if (propDef?.type === 'VARIANT' && propDef.variantOptions) {
-                return (
-                  <select
-                    value={String(currentValue)}
-                    onChange={(e) => handlePropMap(prop.name, newPropName, e.target.value)}
-                  >
-                    <option value="">Select variant...</option>
-                    {propDef.variantOptions.map(option => (
-                      <option key={option} value={option}>{option}</option>
-                    ))}
-                  </select>
-                );
-              }
-
-              // Boolean property - use toggle
-              if (propDef?.type === 'BOOLEAN') {
-                return (
-                  <select
-                    value={String(currentValue)}
-                    onChange={(e) => handlePropMap(prop.name, newPropName, e.target.value === 'true')}
-                  >
-                    <option value="true">On</option>
-                    <option value="false">Off</option>
-                  </select>
-                );
-              }
-
-              // Instance swap - use text input (component key)
-              if (propDef?.type === 'INSTANCE_SWAP') {
-                return (
-                  <input
-                    type="text"
-                    placeholder="Component key to swap"
-                    value={String(currentValue)}
-                    onChange={(e) => handlePropMap(prop.name, newPropName, e.target.value)}
-                  />
-                );
-              }
-
-              // Text property - use text input
-              return (
-                <input
-                  type="text"
-                  placeholder="Value"
-                  value={String(currentValue)}
-                  onChange={(e) => handlePropMap(prop.name, newPropName, e.target.value)}
-                />
-              );
-            })()}
+    <div className="prop-configuration">
+      {/* Old properties - Read-only reference */}
+      {oldProps.length > 0 && (
+        <div className="old-props-reference">
+          <h4>Current Instance Properties (Reference)</h4>
+          <div className="prop-list">
+            {oldProps.map(prop => (
+              <div key={prop.name} className="prop-reference-item">
+                <span className="prop-name">{prop.name}:</span>
+                <span className="prop-value">{String(prop.value)}</span>
+              </div>
+            ))}
           </div>
-        ))}
+        </div>
+      )}
+
+      {/* New properties - Configurable */}
+      <div className="new-props-config">
+        <h4>New Component Properties</h4>
+        {componentProperties.length === 0 ? (
+          <p style={{ fontSize: '13px', color: '#666' }}>Select a component to see its properties...</p>
+        ) : (
+          <div className="prop-inputs">
+            {componentProperties.map(newProp => (
+              <div key={newProp.name} className="prop-input-row">
+                <label>{newProp.name} ({newProp.type})</label>
+                {renderInputForProperty(newProp)}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -171,28 +171,8 @@ figma.ui.onmessage = async (msg) => {
           });
         }
 
-        // Search library components
-        const libraryComponents = await figma.teamLibrary.getAvailableLibraryComponentsAsync();
-
-        for (const libComp of libraryComponents) {
-          if (!libComp.name.toLowerCase().includes(queryLower)) continue;
-
-          // Import temporarily to get thumbnail
-          const imported = await figma.importComponentByKeyAsync(libComp.key);
-          const thumbnail = await imported.exportAsync({
-            format: 'PNG',
-            constraint: { type: 'SCALE', value: 0.3 }
-          });
-          imported.remove(); // Clean up the temporary import
-
-          results.push({
-            id: libComp.key,
-            name: libComp.name,
-            key: libComp.key,
-            library: libComp.libraryName,
-            thumbnail
-          });
-        }
+        // Note: Library component search is not supported by the Figma Plugin API
+        // The API only provides methods for variables, not components or text styles
 
         // Limit to 20 results
         const limitedResults = results.slice(0, 20);
@@ -225,24 +205,30 @@ figma.ui.onmessage = async (msg) => {
 
         // Get properties
         let properties = [];
-        if (component.type === 'COMPONENT') {
-          properties = Object.entries(component.componentPropertyDefinitions || {}).map(([name, def]) => ({
+        let sourceNode = component;
+
+        // If this is a variant component, get properties from the parent ComponentSet
+        if (component.type === 'COMPONENT' && component.parent?.type === 'COMPONENT_SET') {
+          sourceNode = component.parent;
+        }
+
+        // Now get properties from the correct source
+        if (sourceNode.type === 'COMPONENT_SET') {
+          // ComponentSet has properties at the set level
+          properties = Object.entries(sourceNode.componentPropertyDefinitions || {}).map(([name, def]: [string, any]) => ({
             name,
             type: def.type,
             defaultValue: def.defaultValue,
             variantOptions: def.type === 'VARIANT' ? def.variantOptions : undefined
           }));
-        } else if (component.type === 'COMPONENT_SET') {
-          // For component sets, get properties from the first variant
-          const firstVariant = component.children[0] as ComponentNode;
-          if (firstVariant && firstVariant.type === 'COMPONENT') {
-            properties = Object.entries(firstVariant.componentPropertyDefinitions || {}).map(([name, def]) => ({
-              name,
-              type: def.type,
-              defaultValue: def.defaultValue,
-              variantOptions: def.type === 'VARIANT' ? def.variantOptions : undefined
-            }));
-          }
+        } else if (sourceNode.type === 'COMPONENT') {
+          // Non-variant component has its own properties
+          properties = Object.entries(sourceNode.componentPropertyDefinitions || {}).map(([name, def]: [string, any]) => ({
+            name,
+            type: def.type,
+            defaultValue: def.defaultValue,
+            variantOptions: def.type === 'VARIANT' ? def.variantOptions : undefined
+          }));
         }
 
         figma.ui.postMessage({
@@ -253,29 +239,20 @@ figma.ui.onmessage = async (msg) => {
       }
 
       case 'get-text-styles': {
-        // Get both local and library text styles
+        // Get local text styles only
         const localStyles = figma.getLocalTextStyles();
-        const teamLibraryStyles = await figma.teamLibrary.getAvailableLibraryTextStylesAsync();
+
+        // Note: Library text style search is not supported by the Figma Plugin API
+        // The API only provides methods for variables, not components or text styles
 
         // Map local styles
-        const localStylesData = localStyles.map(style => ({
+        const styles = localStyles.map((style: any) => ({
           id: style.id,
           name: style.name,
           fontFamily: style.fontName.family,
           fontSize: style.fontSize as number,
           library: 'Local'
         }));
-
-        // Map library styles
-        const libraryStylesData = teamLibraryStyles.map(libStyle => ({
-          id: libStyle.key,
-          name: libStyle.name,
-          fontFamily: 'Library Style',
-          fontSize: 0,
-          library: libStyle.libraryName
-        }));
-
-        const styles = [...localStylesData, ...libraryStylesData];
 
         figma.ui.postMessage({
           type: 'text-styles-fetched',

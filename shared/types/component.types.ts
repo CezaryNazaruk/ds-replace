@@ -21,11 +21,9 @@ export interface ComponentProperty {
   value: any;
 }
 
+// Simple key-value map of new property names to values (no 1:1 mapping with old props)
 export interface PropMapping {
-  [oldPropName: string]: {
-    newPropName: string;
-    value: any;
-  };
+  [newPropName: string]: any;
 }
 
 export interface SavedMapping {

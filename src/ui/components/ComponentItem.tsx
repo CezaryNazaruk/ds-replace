@@ -57,12 +57,7 @@ export function ComponentItem({ component, instance }: Props) {
 
   const handleReplace = () => {
     if (!newComponentKey) {
-      alert('Please enter a new component key');
-      return;
-    }
-
-    if (!currentMapping) {
-      alert('Please map at least one property');
+      alert('Please select a new component first');
       return;
     }
 
@@ -71,7 +66,7 @@ export function ComponentItem({ component, instance }: Props) {
       payload: {
         instanceId: instance.id,
         newComponentKey,
-        propMapping: currentMapping
+        propMapping: currentMapping || {}
       }
     });
   };
@@ -90,8 +85,8 @@ export function ComponentItem({ component, instance }: Props) {
   };
 
   const handlePreview = () => {
-    if (!newComponentKey || !currentMapping) {
-      alert('Please select a new component and map properties first');
+    if (!newComponentKey) {
+      alert('Please select a new component first');
       return;
     }
 
@@ -100,7 +95,7 @@ export function ComponentItem({ component, instance }: Props) {
       payload: {
         instanceId: instance.id,
         newComponentKey,
-        propMapping: currentMapping
+        propMapping: currentMapping || {}
       }
     });
   };
@@ -179,6 +174,7 @@ export function ComponentItem({ component, instance }: Props) {
 
           <PropMapper
             oldProps={instance.properties}
+            initialMapping={currentMapping}
             onMappingChange={(mapping) => setMapping(instance.id, mapping)}
           />
 
