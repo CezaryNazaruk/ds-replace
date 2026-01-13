@@ -3,7 +3,6 @@ import { useStore } from './store';
 import { usePluginMessage } from './hooks/usePluginMessage';
 import { ComponentList } from './components/ComponentList';
 import { TextStyleManager } from './components/TextStyleManager';
-import { SavedMappings } from './components/SavedMappings';
 import { ComponentDetailView } from './components/ComponentDetailView';
 
 export function App() {
@@ -69,6 +68,7 @@ export function App() {
           instance={currentComponentAndInstance.instance}
           onBack={closeDetailView}
           onAction={handleAction}
+          onNext={navigateToNext}
         />
       </div>
     );
@@ -97,18 +97,11 @@ export function App() {
         >
           Text Styles
         </div>
-        <div
-          className={`tab ${activeTab === 'saved-mappings' ? 'active' : ''}`}
-          onClick={() => setActiveTab('saved-mappings')}
-        >
-          Saved Mappings
-        </div>
       </div>
 
       <main className="main-content">
         {activeTab === 'components' && <ComponentList />}
         {activeTab === 'text-styles' && <TextStyleManager />}
-        {activeTab === 'saved-mappings' && <SavedMappings />}
       </main>
     </div>
   );

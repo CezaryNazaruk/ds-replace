@@ -12,6 +12,7 @@ export function usePluginMessage() {
   const setLoading = useStore(state => state.setLoading);
   const markAsReplaced = useStore(state => state.markAsReplaced);
   const setComponentSearchResults = useStore(state => state.setComponentSearchResults);
+  const setAllAvailableComponents = useStore(state => state.setAllAvailableComponents);
   const setComponentProperties = useStore(state => state.setComponentProperties);
   const setTextStyles = useStore(state => state.setTextStyles);
 
@@ -60,6 +61,10 @@ export function usePluginMessage() {
           setComponentSearchResults(msg.payload.results);
           break;
 
+        case 'all-components-loaded':
+          setAllAvailableComponents(msg.payload.components);
+          break;
+
         case 'component-properties-fetched':
           setComponentProperties(msg.payload.properties);
           break;
@@ -89,6 +94,7 @@ export function usePluginMessage() {
     setLoading,
     markAsReplaced,
     setComponentSearchResults,
+    setAllAvailableComponents,
     setComponentProperties,
     setTextStyles
   ]);

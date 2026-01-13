@@ -24,6 +24,7 @@ export interface ComponentPropertyDefinition {
   type: 'BOOLEAN' | 'TEXT' | 'INSTANCE_SWAP' | 'VARIANT';
   defaultValue: any;
   variantOptions?: string[];
+  isExposed?: boolean; // True if this property comes from an exposed instance
 }
 
 // Text style info

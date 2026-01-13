@@ -21,13 +21,18 @@ interface AppState {
   savedMappings: SavedMapping[];
   setSavedMappings: (mappings: SavedMapping[]) => void;
 
+  // Selected component keys (for persisting component selection per instance)
+  selectedComponentKeys: Map<string, string>;
+  setSelectedComponentKey: (instanceId: string, key: string) => void;
+  getSelectedComponentKey: (instanceId: string) => string | undefined;
+
   // Preview
   previewData: PreviewData | null;
   setPreviewData: (data: PreviewData | null) => void;
 
   // UI state
-  activeTab: 'components' | 'text-styles' | 'saved-mappings';
-  setActiveTab: (tab: 'components' | 'text-styles' | 'saved-mappings') => void;
+  activeTab: 'components' | 'text-styles';
+  setActiveTab: (tab: 'components' | 'text-styles') => void;
   selectedInstanceId: string | null;
   setSelectedInstanceId: (id: string | null) => void;
   isLoading: boolean;
@@ -51,6 +56,8 @@ interface AppState {
   // Component search
   componentSearchResults: ComponentSearchResult[];
   setComponentSearchResults: (results: ComponentSearchResult[]) => void;
+  allAvailableComponents: ComponentSearchResult[];
+  setAllAvailableComponents: (components: ComponentSearchResult[]) => void;
 
   // Component properties
   componentProperties: ComponentPropertyDefinition[];
@@ -134,6 +141,18 @@ export const useStore = create<AppState>((set) => ({
   savedMappings: [],
   setSavedMappings: (mappings) => set({ savedMappings: mappings }),
 
+  selectedComponentKeys: new Map(),
+  setSelectedComponentKey: (instanceId, key) =>
+    set((state) => {
+      const newKeys = new Map(state.selectedComponentKeys);
+      newKeys.set(instanceId, key);
+      return { selectedComponentKeys: newKeys };
+    }),
+  getSelectedComponentKey: (instanceId) => {
+    const state = useStore.getState();
+    return state.selectedComponentKeys.get(instanceId);
+  },
+
   previewData: null,
   setPreviewData: (data) => set({ previewData: data }),
 
@@ -164,6 +183,9 @@ export const useStore = create<AppState>((set) => ({
 
   componentSearchResults: [],
   setComponentSearchResults: (results) => set({ componentSearchResults: results }),
+
+  allAvailableComponents: [],
+  setAllAvailableComponents: (components) => set({ allAvailableComponents: components }),
 
   componentProperties: [],
   setComponentProperties: (properties) => set({ componentProperties: properties }),
@@ -221,9 +243,12 @@ export const useStore = create<AppState>((set) => ({
     const currentIndex = pending.indexOf(state.selectedInstanceId || '');
 
     if (currentIndex !== -1 && currentIndex + 1 < pending.length) {
+      // Clear preview before navigating
+      set({ previewData: null });
       state.openDetailView(pending[currentIndex + 1]);
     } else if (currentIndex === -1 && pending.length > 0) {
       // If no current selection, go to first pending
+      set({ previewData: null });
       state.openDetailView(pending[0]);
     } else {
       // No more pending instances, close detail view

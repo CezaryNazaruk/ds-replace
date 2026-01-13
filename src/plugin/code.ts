@@ -12,7 +12,7 @@ const storageService = new StorageService();
 const previewService = new PreviewService();
 
 // Show UI
-figma.showUI(__html__, { width: 800, height: 800 });
+figma.showUI(__html__, { width: 800, height: 900 });
 
 // Auto-discover if selection exists
 (async () => {
@@ -138,6 +138,50 @@ figma.ui.onmessage = async (msg) => {
         break;
       }
 
+      case 'get-all-components': {
+        // Fetch all components once for client-side filtering
+        const allResults = [];
+        const processedKeys = new Set<string>();
+
+        const localComponents = figma.root.findAllWithCriteria({
+          types: ['COMPONENT', 'COMPONENT_SET']
+        }) as (ComponentNode | ComponentSetNode)[];
+
+        for (const comp of localComponents) {
+          let targetComponent = comp;
+          let displayName = comp.name;
+          let componentKey = comp.key;
+
+          // For variants, use the parent ComponentSet instead
+          if (comp.type === 'COMPONENT' && comp.parent?.type === 'COMPONENT_SET') {
+            targetComponent = comp.parent;
+            displayName = comp.parent.name;
+            componentKey = comp.parent.key;
+          }
+
+          // Skip if we already processed this ComponentSet
+          if (processedKeys.has(componentKey)) continue;
+          processedKeys.add(componentKey);
+
+          allResults.push({
+            id: targetComponent.id,
+            name: displayName,
+            key: componentKey,
+            library: 'Local',
+            thumbnail: await targetComponent.exportAsync({
+              format: 'PNG',
+              constraint: { type: 'SCALE', value: 0.3 }
+            })
+          });
+        }
+
+        figma.ui.postMessage({
+          type: 'all-components-loaded',
+          payload: { components: allResults }
+        });
+        break;
+      }
+
       case 'search-components': {
         const { query } = msg.payload;
         const queryLower = query.toLowerCase();
@@ -224,21 +268,115 @@ figma.ui.onmessage = async (msg) => {
         // Now get properties from the correct source
         if (sourceNode.type === 'COMPONENT_SET') {
           // ComponentSet has properties at the set level
-          properties = Object.entries(sourceNode.componentPropertyDefinitions || {}).map(([name, def]: [string, any]) => ({
-            name,
-            type: def.type,
-            defaultValue: def.defaultValue,
-            variantOptions: def.type === 'VARIANT' ? def.variantOptions : undefined
-          }));
+          properties = Object.entries(sourceNode.componentPropertyDefinitions || {}).map(([name, def]: [string, any]) => {
+            let defaultValue = def.defaultValue;
+
+            // For INSTANCE_SWAP, convert node ID to component key
+            if (def.type === 'INSTANCE_SWAP' && defaultValue) {
+              try {
+                console.log(`[INSTANCE_SWAP] Property "${name}" node ID:`, defaultValue);
+                const node = figma.getNodeById(defaultValue);
+                if (node && 'key' in node) {
+                  defaultValue = (node as any).key;
+                  console.log(`[INSTANCE_SWAP] Converted to key:`, defaultValue);
+                }
+              } catch (e) {
+                console.warn(`Failed to resolve INSTANCE_SWAP node ID: ${defaultValue}`);
+              }
+            }
+
+            const propDef = {
+              name,
+              type: def.type,
+              defaultValue,
+              variantOptions: def.type === 'VARIANT' ? def.variantOptions : undefined
+            };
+
+            // Log INSTANCE_SWAP properties with their default values
+            if (def.type === 'INSTANCE_SWAP') {
+              console.log(`[PROP-FETCH] INSTANCE_SWAP "${name}":`, propDef);
+            }
+
+            return propDef;
+          });
         } else if (sourceNode.type === 'COMPONENT') {
           // Non-variant component has its own properties
-          properties = Object.entries(sourceNode.componentPropertyDefinitions || {}).map(([name, def]: [string, any]) => ({
-            name,
-            type: def.type,
-            defaultValue: def.defaultValue,
-            variantOptions: def.type === 'VARIANT' ? def.variantOptions : undefined
-          }));
+          properties = Object.entries(sourceNode.componentPropertyDefinitions || {}).map(([name, def]: [string, any]) => {
+            let defaultValue = def.defaultValue;
+
+            // For INSTANCE_SWAP, convert node ID to component key
+            if (def.type === 'INSTANCE_SWAP' && defaultValue) {
+              try {
+                console.log(`[INSTANCE_SWAP] Property "${name}" node ID:`, defaultValue);
+                const node = figma.getNodeById(defaultValue);
+                if (node && 'key' in node) {
+                  defaultValue = (node as any).key;
+                  console.log(`[INSTANCE_SWAP] Converted to key:`, defaultValue);
+                }
+              } catch (e) {
+                console.warn(`Failed to resolve INSTANCE_SWAP node ID: ${defaultValue}`);
+              }
+            }
+
+            const propDef = {
+              name,
+              type: def.type,
+              defaultValue,
+              variantOptions: def.type === 'VARIANT' ? def.variantOptions : undefined
+            };
+
+            // Log INSTANCE_SWAP properties with their default values
+            if (def.type === 'INSTANCE_SWAP') {
+              console.log(`[PROP-FETCH] INSTANCE_SWAP "${name}":`, propDef);
+            }
+
+            return propDef;
+          });
         }
+
+        // Also fetch properties from exposed instances (nested components)
+        if ('exposedInstances' in sourceNode && sourceNode.exposedInstances) {
+          console.log('[EXPOSED] Found exposed instances:', sourceNode.exposedInstances.length);
+
+          for (const exposedInstance of sourceNode.exposedInstances) {
+            if (!exposedInstance.mainComponent) continue;
+
+            const instanceName = exposedInstance.name;
+            const mainComp = exposedInstance.mainComponent;
+
+            console.log(`[EXPOSED] Processing instance "${instanceName}" with component:`, mainComp.name);
+
+            // Get properties from the exposed instance's component
+            const exposedProps = Object.entries(mainComp.componentPropertyDefinitions || {}).map(([name, def]: [string, any]) => {
+              let defaultValue = def.defaultValue;
+
+              // For INSTANCE_SWAP, convert node ID to component key
+              if (def.type === 'INSTANCE_SWAP' && defaultValue) {
+                try {
+                  const node = figma.getNodeById(defaultValue);
+                  if (node && 'key' in node) {
+                    defaultValue = (node as any).key;
+                  }
+                } catch (e) {
+                  console.warn(`Failed to resolve INSTANCE_SWAP node ID: ${defaultValue}`);
+                }
+              }
+
+              return {
+                name: `${instanceName}.${name}`,  // Prefix with instance name
+                type: def.type,
+                defaultValue,
+                variantOptions: def.type === 'VARIANT' ? def.variantOptions : undefined,
+                isExposed: true  // Mark as exposed property
+              };
+            });
+
+            properties.push(...exposedProps);
+            console.log(`[EXPOSED] Added ${exposedProps.length} properties from "${instanceName}"`);
+          }
+        }
+
+        console.log('[PROPERTIES] Fetched properties:', properties.map(p => ({ name: p.name, type: p.type })));
 
         figma.ui.postMessage({
           type: 'component-properties-fetched',

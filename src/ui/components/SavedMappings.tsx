@@ -23,30 +23,37 @@ export function SavedMappings() {
       </p>
 
       <div className="mappings-list">
-        {savedMappings.map(mapping => (
-          <div key={mapping.id} className="component-item" style={{ marginBottom: '12px' }}>
-            <div className="item-content">
-              <div style={{ fontWeight: 600, marginBottom: '8px' }}>
-                {mapping.name}
-              </div>
-              <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>
-                {mapping.oldComponentKey} → {mapping.newComponentKey}
-              </div>
-              <div style={{ fontSize: '11px', color: '#999' }}>
-                {Object.keys(mapping.propMapping).length} property mapping{Object.keys(mapping.propMapping).length !== 1 ? 's' : ''}
-              </div>
-              <div style={{ fontSize: '11px', color: '#999', marginTop: '4px' }}>
-                Created: {new Date(mapping.createdAt).toLocaleDateString()}
-              </div>
+        {savedMappings.map(mapping => {
+          // Construct display name with variant if available
+          const displayName = mapping.oldComponentName
+            ? `${mapping.oldComponentName}${mapping.oldComponentVariant ? `/${mapping.oldComponentVariant}` : ''} → ${mapping.newComponentName || 'Unknown'}`
+            : mapping.name; // Fallback to old name field for backwards compatibility
 
-              <div style={{ marginTop: '12px' }}>
-                <button className="primary" disabled>
-                  Use Mapping (Coming soon)
-                </button>
+          return (
+            <div key={mapping.id} className="component-item" style={{ marginBottom: '12px' }}>
+              <div className="item-content">
+                <div style={{ fontWeight: 600, marginBottom: '8px' }}>
+                  {displayName}
+                </div>
+                <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>
+                  {mapping.oldComponentKey} → {mapping.newComponentKey}
+                </div>
+                <div style={{ fontSize: '11px', color: '#999' }}>
+                  {Object.keys(mapping.propMapping).length} property mapping{Object.keys(mapping.propMapping).length !== 1 ? 's' : ''}
+                </div>
+                <div style={{ fontSize: '11px', color: '#999', marginTop: '4px' }}>
+                  Created: {new Date(mapping.createdAt).toLocaleDateString()}
+                </div>
+
+                <div style={{ marginTop: '12px' }}>
+                  <button className="primary" disabled>
+                    Use Mapping (Coming soon)
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

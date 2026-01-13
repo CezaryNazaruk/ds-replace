@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { ComponentProperty, PropMapping } from '../../shared/types/component.types';
 import { useStore } from '../store';
+import { Toggle } from './Toggle';
+import { ComponentSearchInput } from './ComponentSearchInput';
 
 interface Props {
   oldProps: ComponentProperty[];
@@ -60,27 +62,24 @@ export function PropMapper({ oldProps, initialMapping, onMappingChange }: Props)
       );
     }
 
-    // BOOLEAN type - dropdown On/Off
+    // BOOLEAN type - toggle switch
     if (prop.type === 'BOOLEAN') {
       return (
-        <select
-          value={String(currentValue)}
-          onChange={(e) => updateMapping(prop.name, e.target.value === 'true')}
-        >
-          <option value="true">On</option>
-          <option value="false">Off</option>
-        </select>
+        <Toggle
+          checked={currentValue === true}
+          onChange={(checked) => updateMapping(prop.name, checked)}
+        />
       );
     }
 
-    // INSTANCE_SWAP - text input for component key
+    // INSTANCE_SWAP - component search
     if (prop.type === 'INSTANCE_SWAP') {
+      console.log(`[PropMapper] INSTANCE_SWAP "${prop.name}" currentValue:`, currentValue, 'defaultValue:', prop.defaultValue);
       return (
-        <input
-          type="text"
+        <ComponentSearchInput
           value={String(currentValue)}
-          onChange={(e) => updateMapping(prop.name, e.target.value)}
-          placeholder="Component key"
+          onChange={(key) => updateMapping(prop.name, key)}
+          placeholder="Search for component..."
         />
       );
     }
@@ -115,17 +114,29 @@ export function PropMapper({ oldProps, initialMapping, onMappingChange }: Props)
 
       {/* New properties - Configurable */}
       <div className="new-props-config">
-        <h4>New Component Properties</h4>
+        <h4>New Component Properties (v2)</h4>
         {componentProperties.length === 0 ? (
           <p style={{ fontSize: '13px', color: '#666' }}>Select a component to see its properties...</p>
         ) : (
           <div className="prop-inputs">
-            {componentProperties.map(newProp => (
-              <div key={newProp.name} className="prop-input-row">
-                <label>{newProp.name} ({newProp.type})</label>
-                {renderInputForProperty(newProp)}
-              </div>
-            ))}
+            {componentProperties.map(newProp => {
+              // Detect nested property by dot in name
+              const isNested = newProp.name.includes('.');
+              const displayName = isNested ? newProp.name.split('.').pop() : newProp.name;
+
+              return (
+                <div
+                  key={newProp.name}
+                  className={`prop-input-row ${isNested ? 'nested-prop' : ''}`}
+                >
+                  <label>
+                    {isNested && <span className="nested-indicator">↳ </span>}
+                    {displayName} ({newProp.type})
+                  </label>
+                  {renderInputForProperty(newProp)}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

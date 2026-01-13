@@ -20,7 +20,7 @@ export class ComponentReplacementService {
     instance.swapComponent(newComponent);
 
     // Apply prop mappings
-    this.applyPropMapping(instance, propMapping);
+    await this.applyPropMapping(instance, propMapping);
   }
 
   private async findComponentByKey(key: string): Promise<ComponentNode | null> {
@@ -47,7 +47,7 @@ export class ComponentReplacementService {
     return component as ComponentNode;
   }
 
-  private applyPropMapping(instance: InstanceNode, mapping: PropMapping): void {
+  private async applyPropMapping(instance: InstanceNode, mapping: PropMapping): Promise<void> {
     if (!instance.componentProperties) return;
     if (Object.keys(mapping).length === 0) return; // No mapping to apply
 
@@ -55,13 +55,57 @@ export class ComponentReplacementService {
       // Apply each property individually to catch errors
       for (const [propName, value] of Object.entries(mapping)) {
         try {
-          // Check if property exists on the new component
-          if (instance.componentProperties[propName] !== undefined) {
-            // Set the property value directly using Figma's setProperties API
-            instance.setProperties({
-              [propName]: value
-            });
+          const propDef = instance.componentProperties[propName];
+          if (propDef === undefined) continue;
+
+          let finalValue = value;
+
+          // For INSTANCE_SWAP, convert component key to node ID
+          if (propDef.type === 'INSTANCE_SWAP' && value) {
+            try {
+              console.log(`[REPLACE] Setting INSTANCE_SWAP "${propName}" to key:`, value);
+
+              // Value is a component key, find the component and get its node ID
+              let component = figma.root.findOne(
+                node => (node.type === 'COMPONENT' || node.type === 'COMPONENT_SET') &&
+                        ('key' in node) && (node as any).key === value
+              );
+
+              // If not found locally, try to import from library
+              if (!component) {
+                try {
+                  component = await figma.importComponentByKeyAsync(value as string);
+                } catch (importError) {
+                  console.warn(`Failed to import component for key: ${value}`);
+                  continue;
+                }
+              }
+
+              if (component) {
+                console.log(`[REPLACE] Found component type:`, component.type, 'id:', component.id);
+
+                // If it's a ComponentSet, use the default variant
+                if (component.type === 'COMPONENT_SET') {
+                  finalValue = (component as any).defaultVariant.id;
+                  console.log(`[REPLACE] Using defaultVariant id:`, finalValue);
+                } else {
+                  finalValue = component.id;
+                  console.log(`[REPLACE] Using component id:`, finalValue);
+                }
+              } else {
+                console.warn(`Component not found for key: ${value}`);
+                continue;
+              }
+            } catch (e) {
+              console.warn(`Failed to resolve component key ${value}:`, e);
+              continue;
+            }
           }
+
+          // Set the property value directly using Figma's setProperties API
+          instance.setProperties({
+            [propName]: finalValue
+          });
         } catch (propError) {
           console.warn(`Failed to set property ${propName}:`, propError);
           // Continue with other properties even if one fails

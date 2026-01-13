@@ -30,7 +30,10 @@ export interface SavedMapping {
   id: string;
   name: string;
   oldComponentKey: string;
+  oldComponentName: string;        // Component name for matching
+  oldComponentVariant?: string;    // Variant value (e.g., "Primary") for composite key matching
   newComponentKey: string;
+  newComponentName: string;        // New component name for display
   propMapping: PropMapping;
   createdAt: number;
 }

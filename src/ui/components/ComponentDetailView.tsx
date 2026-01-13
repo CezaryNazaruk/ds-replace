@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { ComponentData, InstanceData } from '../../shared/types/component.types';
+import { ComponentData, InstanceData, SavedMapping } from '../../shared/types/component.types';
 import { usePluginMessage } from '../hooks/usePluginMessage';
 import { useStore } from '../store';
 import { PropMapper } from './PropMapper';
@@ -10,10 +10,21 @@ interface Props {
   instance: InstanceData;
   onBack: () => void;
   onAction: (action: 'replace' | 'skip' | 'detach') => void;
+  onNext: () => void;
 }
 
-export function ComponentDetailView({ component, instance, onBack, onAction }: Props) {
-  const [newComponentKey, setNewComponentKey] = useState('');
+// Helper to extract variant value from instance
+const getVariantValue = (instance: InstanceData): string | undefined => {
+  const variantProp = instance.properties.find(p => p.type === 'VARIANT');
+  return variantProp?.value;
+};
+
+// Create composite key for matching
+const getComponentVariantKey = (componentName: string, variant?: string): string => {
+  return variant ? `${componentName}/${variant}` : componentName;
+};
+
+export function ComponentDetailView({ component, instance, onBack, onAction, onNext }: Props) {
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
@@ -22,11 +33,94 @@ export function ComponentDetailView({ component, instance, onBack, onAction }: P
   const currentMapping = useStore(state => state.currentMappings.get(instance.id));
   const setMapping = useStore(state => state.setMapping);
   const previewData = useStore(state => state.previewData);
-  const componentSearchResults = useStore(state => state.componentSearchResults);
-  const getPendingInstances = useStore(state => state.getPendingInstances);
+  const allAvailableComponents = useStore(state => state.allAvailableComponents);
+  const components = useStore(state => state.components);
+  const replacedInstances = useStore(state => state.replacedInstances);
+  const skippedInstances = useStore(state => state.skippedInstances);
+  const setSelectedComponentKey = useStore(state => state.setSelectedComponentKey);
+  const getSelectedComponentKey = useStore(state => state.getSelectedComponentKey);
+  const savedMappings = useStore(state => state.savedMappings);
 
-  // Calculate progress
-  const pendingInstances = useMemo(() => getPendingInstances(), [getPendingInstances]);
+  // Initialize from store
+  const [newComponentKey, setNewComponentKey] = useState(() =>
+    getSelectedComponentKey(instance.id) || ''
+  );
+  const [previewTrigger, setPreviewTrigger] = useState(0); // Force preview regeneration
+
+  // Load all available components on mount (only once, cached in store)
+  useEffect(() => {
+    if (allAvailableComponents.length === 0) {
+      sendMessage({ type: 'get-all-components' });
+    }
+  }, []);
+
+  // Filter components locally
+  const componentSearchResults = useMemo(() => {
+    if (searchQuery.length < 2) return [];
+    const query = searchQuery.toLowerCase();
+    return allAvailableComponents.filter(comp =>
+      comp.name.toLowerCase().includes(query)
+    ).slice(0, 20);
+  }, [searchQuery, allAvailableComponents]);
+
+  // Initialize mapping when navigating to instance with persisted key
+  useEffect(() => {
+    if (newComponentKey && !currentMapping) {
+      setMapping(instance.id, {});
+    }
+  }, [newComponentKey, currentMapping, instance.id, setMapping]);
+
+  // Auto-suggest mapping based on component name + variant
+  useEffect(() => {
+    // Only auto-suggest if no component selected yet
+    if (!newComponentKey && savedMappings.length > 0) {
+      const variantValue = getVariantValue(instance);
+      const compositeKey = getComponentVariantKey(component.name, variantValue);
+
+      // Find previous mapping for this component+variant combo
+      const previousMapping = savedMappings.find(m => {
+        const prevCompositeKey = getComponentVariantKey(
+          m.oldComponentName,
+          m.oldComponentVariant
+        );
+        return prevCompositeKey === compositeKey;
+      });
+
+      if (previousMapping) {
+        // Auto-populate
+        setNewComponentKey(previousMapping.newComponentKey);
+        setSelectedComponentKey(instance.id, previousMapping.newComponentKey);
+        setMapping(instance.id, previousMapping.propMapping);
+
+        // Also set search query to show the component name
+        const newCompName = allAvailableComponents.find(
+          c => c.key === previousMapping.newComponentKey
+        )?.name;
+        if (newCompName) {
+          setSearchQuery(newCompName);
+        }
+
+        // IMPORTANT: Fetch properties for the auto-suggested component
+        sendMessage({ type: 'get-component-properties', payload: { componentKey: previousMapping.newComponentKey } });
+
+        console.log(`[AUTO-SUGGEST] ${compositeKey} → ${previousMapping.newComponentName}`);
+      }
+    }
+  }, [component.name, instance.properties, savedMappings, newComponentKey, instance.id, allAvailableComponents]);
+
+  // Calculate progress - directly subscribe to store state for reactivity
+  const pendingInstances = useMemo(() => {
+    const allInstances: string[] = [];
+    components.forEach(comp => {
+      comp.instances.forEach(inst => {
+        allInstances.push(inst.id);
+      });
+    });
+    return allInstances.filter(id =>
+      !replacedInstances.has(id) && !skippedInstances.has(id)
+    );
+  }, [components, replacedInstances, skippedInstances]);
+
   const currentIndex = pendingInstances.indexOf(instance.id);
   const totalPending = pendingInstances.length;
 
@@ -36,24 +130,14 @@ export function ComponentDetailView({ component, instance, onBack, onAction }: P
     return `data:image/png;base64,${btoa(String.fromCharCode(...component.thumbnail))}`;
   }, [component.thumbnail]);
 
-  // Real-time component search
+  // Show/hide search results based on query
   useEffect(() => {
-    if (searchQuery.length === 0) {
-      setShowSearchResults(false);
-      return;
-    }
+    setShowSearchResults(searchQuery.length >= 2 && componentSearchResults.length > 0);
+  }, [searchQuery, componentSearchResults]);
 
-    const timer = setTimeout(() => {
-      sendMessage({ type: 'search-components', payload: { query: searchQuery } });
-      setShowSearchResults(true);
-    }, 150);
-
-    return () => clearTimeout(timer);
-  }, [searchQuery, sendMessage]);
-
-  // Debounced preview generation (300ms)
+  // Debounced preview generation (300ms) - trigger on key or previewTrigger change
   useEffect(() => {
-    if (!newComponentKey || !currentMapping) return;
+    if (!newComponentKey) return;
 
     const timer = setTimeout(() => {
       setIsGeneratingPreview(true);
@@ -62,13 +146,13 @@ export function ComponentDetailView({ component, instance, onBack, onAction }: P
         payload: {
           instanceId: instance.id,
           newComponentKey,
-          propMapping: currentMapping
+          propMapping: currentMapping || {}
         }
       });
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [newComponentKey, currentMapping, instance.id, sendMessage]);
+  }, [newComponentKey, currentMapping, instance.id, sendMessage, previewTrigger]);
 
   // Clear loading state when preview data arrives
   useEffect(() => {
@@ -79,8 +163,10 @@ export function ComponentDetailView({ component, instance, onBack, onAction }: P
 
   const handleSelectComponent = (key: string, name: string) => {
     setNewComponentKey(key);
+    setSelectedComponentKey(instance.id, key); // Save to store
     setSearchQuery(name);
     setShowSearchResults(false);
+    setPreviewTrigger(prev => prev + 1); // Force preview regeneration
 
     // Fetch properties for the selected component
     sendMessage({ type: 'get-component-properties', payload: { componentKey: key } });
@@ -102,6 +188,55 @@ export function ComponentDetailView({ component, instance, onBack, onAction }: P
     });
 
     onAction('replace');
+  };
+
+  const handleReplaceOnly = () => {
+    if (!newComponentKey) {
+      alert('Please select a new component first');
+      return;
+    }
+
+    // Auto-save mapping with variant context
+    const variantValue = getVariantValue(instance);
+    const newCompName = allAvailableComponents.find(
+      c => c.key === newComponentKey
+    )?.name || 'Unknown';
+
+    const mapping: SavedMapping = {
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      name: `${component.name}${variantValue ? `/${variantValue}` : ''} → ${newCompName}`,
+      oldComponentKey: component.key,
+      oldComponentName: component.name,
+      oldComponentVariant: variantValue,
+      newComponentKey,
+      newComponentName: newCompName,
+      propMapping: currentMapping || {},
+      createdAt: Date.now()
+    };
+
+    // Save to plugin data
+    sendMessage({
+      type: 'save-mapping',
+      payload: { mapping }
+    });
+
+    // Continue with replacement
+    sendMessage({
+      type: 'replace-component',
+      payload: {
+        instanceId: instance.id,
+        newComponentKey,
+        propMapping: currentMapping || {}
+      }
+    });
+
+    // Don't navigate, just mark as replaced
+    const markAsReplaced = useStore.getState().markAsReplaced;
+    markAsReplaced(instance.id);
+  };
+
+  const handleNext = () => {
+    onNext();
   };
 
   const handleSkip = () => {
@@ -206,8 +341,11 @@ export function ComponentDetailView({ component, instance, onBack, onAction }: P
         <button onClick={handleDetach} className="danger">
           Detach
         </button>
-        <button onClick={handleReplace} className="primary">
-          Replace & Next
+        <button onClick={handleReplaceOnly} className="primary">
+          Replace
+        </button>
+        <button onClick={handleNext} className="secondary">
+          Next
         </button>
       </div>
     </div>

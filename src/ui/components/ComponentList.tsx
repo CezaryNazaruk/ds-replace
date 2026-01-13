@@ -1,11 +1,13 @@
 import React, { useMemo } from 'react';
 import { useStore } from '../store';
+import { usePluginMessage } from '../hooks/usePluginMessage';
 
 export function ComponentList() {
   const components = useStore(state => state.components);
   const openDetailView = useStore(state => state.openDetailView);
   const replacedInstances = useStore(state => state.replacedInstances);
   const skippedInstances = useStore(state => state.skippedInstances);
+  const { sendMessage } = usePluginMessage();
 
   // Convert thumbnails to base64
   const componentThumbnails = useMemo(() => {
@@ -56,7 +58,18 @@ export function ComponentList() {
                 <div
                   key={instance.id}
                   className={`instance-card ${isReplaced ? 'replaced' : ''} ${isSkipped ? 'skipped' : ''}`}
-                  onClick={() => !isReplaced && !isSkipped && openDetailView(instance.id)}
+                  onClick={() => {
+                    if (!isReplaced && !isSkipped) {
+                      // Open detail view for pending instances
+                      openDetailView(instance.id);
+                    } else {
+                      // Just navigate for processed instances (don't open detail view)
+                      sendMessage({
+                        type: 'focus-on-node',
+                        payload: { nodeId: instance.id }
+                      });
+                    }
+                  }}
                 >
                   <div className="instance-name">{instance.name}</div>
                   {isReplaced && <span className="status-badge replaced">✓ Replaced</span>}
