@@ -24,6 +24,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Clean build output
+        run: rm -rf dist figma-plugin figma-plugin.zip
+        
       - name: Build plugin
         run: npm run build
 
