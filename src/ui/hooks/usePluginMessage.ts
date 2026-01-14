@@ -1,5 +1,6 @@
 import { useEffect, useCallback } from 'react';
 import { useStore } from '../store';
+import { UIMessage } from '../../shared/types/messages.types';
 
 export function usePluginMessage() {
   const setComponents = useStore(state => state.setComponents);
@@ -99,7 +100,7 @@ export function usePluginMessage() {
     setTextStyles
   ]);
 
-  const sendMessage = useCallback((message: any) => {
+  const sendMessage = useCallback((message: UIMessage) => {
     parent.postMessage({ pluginMessage: message }, '*');
   }, []);
 

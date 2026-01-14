@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { ComponentProperty, PropMapping } from '../../shared/types/component.types';
+import { ComponentPropertyDefinition } from '../../shared/types/messages.types';
 import { useStore } from '../store';
 import { Toggle } from './Toggle';
 import { ComponentSearchInput } from './ComponentSearchInput';
+import { sortPropertiesByVariant } from '../../shared/utils/variantUtils';
 
 interface Props {
   oldProps: ComponentProperty[];
@@ -14,6 +16,10 @@ export function PropMapper({ oldProps, initialMapping, onMappingChange }: Props)
   const [mapping, setMapping] = useState<PropMapping>(initialMapping || {});
   const componentProperties = useStore(state => state.componentProperties);
   const [lastPropertiesLength, setLastPropertiesLength] = useState(0);
+
+  // Sort properties to put VARIANT at the top
+  const sortedOldProps = useMemo(() => sortPropertiesByVariant(oldProps), [oldProps]);
+  const sortedComponentProperties = useMemo(() => sortPropertiesByVariant(componentProperties), [componentProperties]);
 
   // Initialize mapping with default values when component properties first load
   useEffect(() => {
@@ -44,7 +50,7 @@ export function PropMapper({ oldProps, initialMapping, onMappingChange }: Props)
     onMappingChange(newMapping);
   };
 
-  const renderInputForProperty = (prop: any) => {
+  const renderInputForProperty = (prop: ComponentPropertyDefinition) => {
     const currentValue = mapping[prop.name] !== undefined ? mapping[prop.name] : prop.defaultValue;
 
     // VARIANT type - dropdown with options
@@ -74,7 +80,6 @@ export function PropMapper({ oldProps, initialMapping, onMappingChange }: Props)
 
     // INSTANCE_SWAP - component search
     if (prop.type === 'INSTANCE_SWAP') {
-      console.log(`[PropMapper] INSTANCE_SWAP "${prop.name}" currentValue:`, currentValue, 'defaultValue:', prop.defaultValue);
       return (
         <ComponentSearchInput
           value={String(currentValue)}
@@ -97,48 +102,58 @@ export function PropMapper({ oldProps, initialMapping, onMappingChange }: Props)
 
   return (
     <div className="prop-configuration">
-      {/* Old properties - Read-only reference */}
-      {oldProps.length > 0 && (
-        <div className="old-props-reference">
-          <h4>Current Instance Properties (Reference)</h4>
-          <div className="prop-list">
-            {oldProps.map(prop => (
-              <div key={prop.name} className="prop-reference-item">
-                <span className="prop-name">{prop.name}:</span>
-                <span className="prop-value">{String(prop.value)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* New properties - Configurable */}
-      <div className="new-props-config">
-        <h4>New Component Properties (v2)</h4>
-        {componentProperties.length === 0 ? (
-          <p style={{ fontSize: '13px', color: '#666' }}>Select a component to see its properties...</p>
-        ) : (
-          <div className="prop-inputs">
-            {componentProperties.map(newProp => {
-              // Detect nested property by dot in name
-              const isNested = newProp.name.includes('.');
-              const displayName = isNested ? newProp.name.split('.').pop() : newProp.name;
-
-              return (
-                <div
-                  key={newProp.name}
-                  className={`prop-input-row ${isNested ? 'nested-prop' : ''}`}
-                >
-                  <label>
-                    {isNested && <span className="nested-indicator">↳ </span>}
-                    {displayName} ({newProp.type})
-                  </label>
-                  {renderInputForProperty(newProp)}
+      <div className="prop-columns">
+        {/* Old properties - Read-only reference */}
+        <div className="prop-column old-props-column">
+          <h4>Current properties</h4>
+          {sortedOldProps.length > 0 ? (
+            <div className="prop-list">
+              {sortedOldProps.map(prop => (
+                <div key={prop.name} className="prop-item">
+                  <div className="prop-header">
+                    <span className="prop-name">{prop.name}</span>
+                    <span className="prop-type">{prop.type}</span>
+                  </div>
+                  <div className="prop-value">{String(prop.value)}</div>
                 </div>
-              );
-            })}
-          </div>
-        )}
+              ))}
+            </div>
+          ) : (
+            <p className="empty-state">No properties</p>
+          )}
+        </div>
+
+        {/* New properties - Configurable */}
+        <div className="prop-column new-props-column">
+          <h4>New properties</h4>
+          {sortedComponentProperties.length === 0 ? (
+            <p className="empty-state">Select a component to see its properties...</p>
+          ) : (
+            <div className="prop-list">
+              {sortedComponentProperties.map(newProp => {
+                // Detect nested property by dot in name
+                const isNested = newProp.name.includes('.');
+                const displayName = isNested ? newProp.name.split('.').pop() : newProp.name;
+
+                return (
+                  <div
+                    key={newProp.name}
+                    className={`prop-item ${isNested ? 'nested-prop' : ''}`}
+                  >
+                    <div className="prop-header">
+                      {isNested && <span className="nested-indicator">↳ </span>}
+                      <span className="prop-name">{displayName}</span>
+                      <span className="prop-type">{newProp.type}</span>
+                    </div>
+                    <div className="prop-input">
+                      {renderInputForProperty(newProp)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

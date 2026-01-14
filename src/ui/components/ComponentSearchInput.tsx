@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { usePluginMessage } from '../hooks/usePluginMessage';
 import { ComponentSearchResult } from '../../shared/types/messages.types';
+import { convertThumbnailToBase64 } from '../utils/imageUtils';
 
 interface Props {
   value: string;
@@ -33,26 +34,11 @@ export function ComponentSearchInput({ value, onChange, placeholder = 'Search fo
 
   // Initialize search query from current value (resolve key to name)
   useEffect(() => {
-    console.log('[ComponentSearchInput] Init effect - value:', value, 'localResults.length:', localResults.length, 'searchQuery:', searchQuery);
-    if (value) {
-      if (localResults.length > 0) {
-        // Try to find the component name for this key
-        const component = localResults.find(c => c.key === value);
-        console.log('[ComponentSearchInput] Found component for key:', component);
-        if (component && searchQuery !== component.name) {
-          console.log('[ComponentSearchInput] Setting searchQuery to:', component.name);
-          setSearchQuery(component.name);
-        } else if (!component && !searchQuery) {
-          // Component not found in list - show truncated key as fallback
-          const truncatedKey = value.substring(0, 16) + '...';
-          console.log('[ComponentSearchInput] Component not found, using truncated key:', truncatedKey);
-          setSearchQuery(truncatedKey);
-        }
-      } else if (!searchQuery) {
-        // Results not loaded yet - show truncated key as placeholder
-        const truncatedKey = value.substring(0, 16) + '...';
-        console.log('[ComponentSearchInput] Results not loaded, using truncated key:', truncatedKey);
-        setSearchQuery(truncatedKey);
+    if (value && localResults.length > 0) {
+      // Try to find the component name for this key
+      const component = localResults.find(c => c.key === value);
+      if (component && searchQuery !== component.name) {
+        setSearchQuery(component.name);
       }
     }
   }, [value, localResults]); // Removed searchQuery from deps to allow re-initialization
@@ -86,9 +72,7 @@ export function ComponentSearchInput({ value, onChange, placeholder = 'Search fo
       {showResults && filteredResults.length > 0 && (
         <div className="search-results">
           {filteredResults.map(result => {
-            const thumbnail = result.thumbnail
-              ? `data:image/png;base64,${btoa(String.fromCharCode(...result.thumbnail))}`
-              : null;
+            const thumbnail = convertThumbnailToBase64(result.thumbnail);
 
             return (
               <div

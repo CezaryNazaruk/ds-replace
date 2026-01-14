@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { useStore } from '../store';
 import { usePluginMessage } from '../hooks/usePluginMessage';
+import { convertThumbnailToBase64 } from '../utils/imageUtils';
 
 export function ComponentList() {
   const components = useStore(state => state.components);
@@ -11,10 +12,10 @@ export function ComponentList() {
 
   // Convert thumbnails to base64
   const componentThumbnails = useMemo(() => {
-    const map = new Map<string, string>();
+    const map = new Map<string, string | null>();
     components.forEach(comp => {
-      if (comp.thumbnail) {
-        const base64 = `data:image/png;base64,${btoa(String.fromCharCode(...comp.thumbnail))}`;
+      const base64 = convertThumbnailToBase64(comp.thumbnail);
+      if (base64) {
         map.set(comp.key, base64);
       }
     });

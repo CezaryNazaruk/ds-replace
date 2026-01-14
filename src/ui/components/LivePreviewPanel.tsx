@@ -1,5 +1,6 @@
 import React from 'react';
 import { PreviewData } from '../../../shared/types/messages.types';
+import { convertThumbnailToBase64 } from '../utils/imageUtils';
 
 interface Props {
   previewData: PreviewData | null;
@@ -29,8 +30,8 @@ export function LivePreviewPanel({ previewData, isLoading }: Props) {
   }
 
   // Convert Uint8Array to base64 for image display
-  const oldImageBase64 = `data:image/png;base64,${btoa(String.fromCharCode(...previewData.oldImage))}`;
-  const newImageBase64 = `data:image/png;base64,${btoa(String.fromCharCode(...previewData.newImage))}`;
+  const oldImageBase64 = convertThumbnailToBase64(previewData.oldImage) || '';
+  const newImageBase64 = convertThumbnailToBase64(previewData.newImage) || '';
 
   return (
     <div className="preview-panel">

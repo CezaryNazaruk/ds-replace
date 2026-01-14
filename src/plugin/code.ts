@@ -3,6 +3,7 @@ import { ComponentReplacementService } from './services/ComponentReplacementServ
 import { TextNodeService } from './services/TextNodeService';
 import { StorageService } from './services/StorageService';
 import { PreviewService } from './services/PreviewService';
+import { SEARCH_CONFIG, THUMBNAIL_CONFIG } from '../shared/constants/config';
 
 // Initialize services
 const discoveryService = new ComponentDiscoveryService();
@@ -36,6 +37,20 @@ figma.showUI(__html__, { width: 800, height: 900 });
 
 // Message handler
 figma.ui.onmessage = async (msg) => {
+  // Helper to resolve INSTANCE_SWAP default values from node ID to component key
+  const resolveInstanceSwapDefault = (defaultValue: any): any => {
+    if (!defaultValue) return defaultValue;
+    try {
+      const node = figma.getNodeById(defaultValue);
+      if (node && 'key' in node) {
+        return (node as any).key;
+      }
+    } catch (e) {
+      // Silent fail, return original value
+    }
+    return defaultValue;
+  };
+
   try {
     switch (msg.type) {
       case 'discover-components': {
@@ -148,29 +163,26 @@ figma.ui.onmessage = async (msg) => {
         }) as (ComponentNode | ComponentSetNode)[];
 
         for (const comp of localComponents) {
-          let targetComponent = comp;
-          let displayName = comp.name;
-          let componentKey = comp.key;
+          // Skip duplicates
+          if (processedKeys.has(comp.key)) continue;
+          processedKeys.add(comp.key);
 
-          // For variants, use the parent ComponentSet instead
-          if (comp.type === 'COMPONENT' && comp.parent?.type === 'COMPONENT_SET') {
-            targetComponent = comp.parent;
-            displayName = comp.parent.name;
-            componentKey = comp.parent.key;
-          }
+          // Check if this is a variant with a parent ComponentSet
+          const isVariant = comp.type === 'COMPONENT' && comp.parent?.type === 'COMPONENT_SET';
+          const parentKey = isVariant ? comp.parent.key : undefined;
 
-          // Skip if we already processed this ComponentSet
-          if (processedKeys.has(componentKey)) continue;
-          processedKeys.add(componentKey);
-
+          // Add each component as-is with its own key (no variant collapsing)
+          // This allows INSTANCE_SWAP properties to reference specific variants
           allResults.push({
-            id: targetComponent.id,
-            name: displayName,
-            key: componentKey,
+            id: comp.id,
+            name: comp.name,
+            key: comp.key,
             library: 'Local',
-            thumbnail: await targetComponent.exportAsync({
+            isVariant,
+            parentComponentSetKey: parentKey,
+            thumbnail: await comp.exportAsync({
               format: 'PNG',
-              constraint: { type: 'SCALE', value: 0.3 }
+              constraint: { type: 'SCALE', value: THUMBNAIL_CONFIG.SCALE }
             })
           });
         }
@@ -219,7 +231,7 @@ figma.ui.onmessage = async (msg) => {
             library: 'Local',
             thumbnail: await targetComponent.exportAsync({
               format: 'PNG',
-              constraint: { type: 'SCALE', value: 0.3 }
+              constraint: { type: 'SCALE', value: THUMBNAIL_CONFIG.SCALE }
             })
           });
         }
@@ -227,8 +239,8 @@ figma.ui.onmessage = async (msg) => {
         // Note: Library component search is not supported by the Figma Plugin API
         // The API only provides methods for variables, not components or text styles
 
-        // Limit to 20 results
-        const limitedResults = results.slice(0, 20);
+        // Limit results
+        const limitedResults = results.slice(0, SEARCH_CONFIG.MAX_RESULTS);
 
         figma.ui.postMessage({
           type: 'components-search-results',
@@ -272,32 +284,16 @@ figma.ui.onmessage = async (msg) => {
             let defaultValue = def.defaultValue;
 
             // For INSTANCE_SWAP, convert node ID to component key
-            if (def.type === 'INSTANCE_SWAP' && defaultValue) {
-              try {
-                console.log(`[INSTANCE_SWAP] Property "${name}" node ID:`, defaultValue);
-                const node = figma.getNodeById(defaultValue);
-                if (node && 'key' in node) {
-                  defaultValue = (node as any).key;
-                  console.log(`[INSTANCE_SWAP] Converted to key:`, defaultValue);
-                }
-              } catch (e) {
-                console.warn(`Failed to resolve INSTANCE_SWAP node ID: ${defaultValue}`);
-              }
+            if (def.type === 'INSTANCE_SWAP') {
+              defaultValue = resolveInstanceSwapDefault(defaultValue);
             }
 
-            const propDef = {
+            return {
               name,
               type: def.type,
               defaultValue,
               variantOptions: def.type === 'VARIANT' ? def.variantOptions : undefined
             };
-
-            // Log INSTANCE_SWAP properties with their default values
-            if (def.type === 'INSTANCE_SWAP') {
-              console.log(`[PROP-FETCH] INSTANCE_SWAP "${name}":`, propDef);
-            }
-
-            return propDef;
           });
         } else if (sourceNode.type === 'COMPONENT') {
           // Non-variant component has its own properties
@@ -305,32 +301,16 @@ figma.ui.onmessage = async (msg) => {
             let defaultValue = def.defaultValue;
 
             // For INSTANCE_SWAP, convert node ID to component key
-            if (def.type === 'INSTANCE_SWAP' && defaultValue) {
-              try {
-                console.log(`[INSTANCE_SWAP] Property "${name}" node ID:`, defaultValue);
-                const node = figma.getNodeById(defaultValue);
-                if (node && 'key' in node) {
-                  defaultValue = (node as any).key;
-                  console.log(`[INSTANCE_SWAP] Converted to key:`, defaultValue);
-                }
-              } catch (e) {
-                console.warn(`Failed to resolve INSTANCE_SWAP node ID: ${defaultValue}`);
-              }
+            if (def.type === 'INSTANCE_SWAP') {
+              defaultValue = resolveInstanceSwapDefault(defaultValue);
             }
 
-            const propDef = {
+            return {
               name,
               type: def.type,
               defaultValue,
               variantOptions: def.type === 'VARIANT' ? def.variantOptions : undefined
             };
-
-            // Log INSTANCE_SWAP properties with their default values
-            if (def.type === 'INSTANCE_SWAP') {
-              console.log(`[PROP-FETCH] INSTANCE_SWAP "${name}":`, propDef);
-            }
-
-            return propDef;
           });
         }
 

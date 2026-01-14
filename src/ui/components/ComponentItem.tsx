@@ -3,6 +3,7 @@ import { ComponentData, InstanceData } from '../../shared/types/component.types'
 import { usePluginMessage } from '../hooks/usePluginMessage';
 import { useStore } from '../store';
 import { PropMapper } from './PropMapper';
+import { convertThumbnailToBase64 } from '../utils/imageUtils';
 
 interface Props {
   component: ComponentData;
@@ -27,8 +28,7 @@ export function ComponentItem({ component, instance }: Props) {
 
   // Convert thumbnail to base64 for display
   const thumbnailBase64 = useMemo(() => {
-    if (!component.thumbnail) return null;
-    return `data:image/png;base64,${btoa(String.fromCharCode(...component.thumbnail))}`;
+    return convertThumbnailToBase64(component.thumbnail);
   }, [component.thumbnail]);
 
   // Real-time component search
@@ -147,9 +147,7 @@ export function ComponentItem({ component, instance }: Props) {
               {showSearchResults && componentSearchResults.length > 0 && (
                 <div className="search-results">
                   {componentSearchResults.map(result => {
-                    const resultThumbnail = result.thumbnail
-                      ? `data:image/png;base64,${btoa(String.fromCharCode(...result.thumbnail))}`
-                      : null;
+                    const resultThumbnail = convertThumbnailToBase64(result.thumbnail);
 
                     return (
                       <div

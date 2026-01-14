@@ -16,6 +16,8 @@ export interface ComponentSearchResult {
   key: string;
   library: string;
   thumbnail: Uint8Array;
+  isVariant?: boolean;           // True if this is a variant with a parent ComponentSet
+  parentComponentSetKey?: string; // Parent ComponentSet key if isVariant is true
 }
 
 // Component property definition
